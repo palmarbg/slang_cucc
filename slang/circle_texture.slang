@@ -136,25 +136,27 @@ public struct GLSLTensor<int D> : IDiffTensor<float, D>
     }
 
     [Differentiable]
-    [BackwardDerivative(_load_bwd_array)]
+    [TreatAsDifferentiable]
+    // [BackwardDerivative(_load_bwd_array)]
     public float load<I : __BuiltinIntegerType>(I idx[D]) {
         return data.load(idx);
     }
 
-    void _load_bwd_array<I : __BuiltinIntegerType>(I idx[D], float.Differential grad) {
-        return;
-    }
+    // void _load_bwd_array<I : __BuiltinIntegerType>(I idx[D], float.Differential grad) {
+    //     return;
+    // }
 
     [Differentiable]
-    [BackwardDerivative(_load_bwd_vector)]
+    [TreatAsDifferentiable]
+    // [BackwardDerivative(_load_bwd_vector)]
     public float load<I : __BuiltinIntegerType>(vector<I, D> idx) {
         return data.load(idx);
     }
 
-    void _load_bwd_vector<I : __BuiltinIntegerType>(vector<I, D> idx, float.Differential grad)
-    {
-        return;
-    }
+    // void _load_bwd_vector<I : __BuiltinIntegerType>(vector<I, D> idx, float.Differential grad)
+    // {
+    //     return;
+    // }
 
     public __subscript<I : __BuiltinIntegerType>(I indices[D])->float
     {
@@ -164,8 +166,6 @@ public struct GLSLTensor<int D> : IDiffTensor<float, D>
     {
         [Differentiable] get { return load(indices); }
     }
-
-    
 }
 
 Tensor<float, 2> weights1;

@@ -11,7 +11,7 @@ slang_device = spy.create_torch_device(type=spy.DeviceType.cuda, include_paths=[
 ])
 
 # Load the module
-slang_module = spy.Module.load_from_file(slang_device, "../slang/circle_texture.slang")
+slang_module = spy.Module.load_from_file(slang_device, "../slang/circle_texture_const.slang")
 
 
 # Init model parameters
