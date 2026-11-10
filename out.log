@@ -138,3 +138,11 @@ public struct MLVec<int N> : IDifferentiable
         return {};
     }
 }
+
+
+
+
+
+
+
+slang compile "slang/circle_texture_const.slang" -I "C:\Users\palma\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\slangpy\slang" -I "C:\Users\palma\Desktop\projects\slang\" -target glsl -profile glsl_450 -entry fragmentMain -o "glsl/circle_texture_const.frag" -D USE_DEFINITON_FILE

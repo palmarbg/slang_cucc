@@ -20,7 +20,7 @@ float sigmoid(float x)
 }
 
 [Differentiable]
-public float forward(
+public float[3] forward(
     no_diff int index,
 
     IDiffTensor<float, 2> uvs,
@@ -47,7 +47,7 @@ public float forward(
 }
 
 [Differentiable]
-public float evaluateNetwork(
+public float[3] evaluateNetwork(
     float2 uv,
 
     IDiffTensor<float, 2> weights1,
@@ -90,10 +90,10 @@ public float evaluateNetwork(
         h2[i] = leaky_relu(value);
     }
 
-    // Layer 3: 32 -> 1
-    float h3[1];
+    // Layer 3: 32 -> 3
+    float h3[3];
 
-    for (int i = 0; i < 1; ++i)
+    for (int i = 0; i < 3; ++i)
     {
         float value = bias3[i];
 
@@ -105,7 +105,7 @@ public float evaluateNetwork(
         h3[i] = sigmoid(value);
     }
 
-    return h3[0];
+    return h3;
 }
 
 /************************************** FRAGMENT SHADER **************************************/
@@ -125,13 +125,12 @@ public struct GLSLVectorWrapper<let D: int> : IDiffTensor<float, 1>
     public float data[D];
     public uint[1] _shape;
     public uint[1] _stride = { 1 };
-    public property shape : uint[1] { get { return _shape; } }
+    public property shape : uint[1] { [ForceInline] get { return _shape; } }
 
-    public static GLSLVectorWrapper<D> fromTensor(float data[D], uint shape[1]) {
-        GLSLVectorWrapper<D> instance;
-        instance.data = data;
-        instance._shape = shape;
-        return instance;
+    [ForceInline]
+    __init(const float data[D], uint shape[1]) {
+        this.data = data;
+        this._shape = shape;
     }
 
     // float _read_primal_each<I : __BuiltinIntegerType>() {
@@ -142,38 +141,44 @@ public struct GLSLVectorWrapper<let D: int> : IDiffTensor<float, 1>
     //     return (*data)[(__first(idx)).toInt()];
     // }
 
+    [ForceInline]
     float _read_primal_each<each I : __BuiltinIntegerType>(I idx) {
         int lin_idx = _idx_each(expand each idx, _stride, 0);
         return data[lin_idx];
     }
 
+    [ForceInline]
     void _write_grad_each<each I : __BuiltinIntegerType>(float.Differential grad, expand each I idx) {
         return;
     }
 
+    [ForceInline]
     void _accumulate_grad_each<each I : __BuiltinIntegerType>(float.Differential grad, expand each I idx) {
         return;
     }
 
     [Differentiable]
     [TreatAsDifferentiable]
+    [ForceInline]
     public float load<I : __BuiltinIntegerType>(I idx[1]) {
         return data[idx[0].toInt()];
     }
 
     [Differentiable]
     [TreatAsDifferentiable]
+    [ForceInline]
     public float load<I : __BuiltinIntegerType>(vector<I, 1> idx) {
         return data[idx[0].toInt()];
     }
 
     public __subscript<I : __BuiltinIntegerType>(I indices[1])->float
     {
-        [Differentiable] get { return load(indices); }
+        [Differentiable] [ForceInline] get { return load(indices); }
     }
+
     public __subscript<I : __BuiltinIntegerType>(vector<I, 1> indices)->float
     {
-        [Differentiable] get { return load(indices); }
+        [Differentiable] [ForceInline] get { return load(indices); }
     }
 }
 
@@ -182,71 +187,79 @@ public struct GLSLMatrixWrapper<let D:int> : IDiffTensor<float, 2>
     public float data[D];
     public uint[2] _shape;
     public uint[2] _stride;
-    public property shape : uint[2] { get { return _shape; } }
+    public property shape : uint[2] { [ForceInline] get { return _shape; } }
 
-    public static GLSLMatrixWrapper<D> fromTensor(float data[D], uint shape[2]) {
-        GLSLMatrixWrapper<D> instance;
-        instance.data = data;
-        instance._shape = shape;
-        instance._stride = { shape[0], 1 };
-        return instance;
+    [ForceInline]
+    __init(const float data[D], uint shape[2]) {
+        this.data = data;
+        this._shape = shape;
+        this._stride = { shape[1], 1 };
     }
 
+    [ForceInline]
     float _read_primal_each<each I : __BuiltinIntegerType>(I idx) {
         int lin_idx = _idx_each(expand each idx, _stride, 0);
         return data[lin_idx];
     }
 
+    [ForceInline]
     void _write_grad_each<each I : __BuiltinIntegerType>(float.Differential grad, expand each I idx) {
         return;
     }
 
+    [ForceInline]
     void _accumulate_grad_each<each I : __BuiltinIntegerType>(float.Differential grad, expand each I idx) {
         return;
     }
 
     [Differentiable]
     [TreatAsDifferentiable]
+    [ForceInline]
     public float load<I : __BuiltinIntegerType>(I idx[2]) {
         return data[idx[0].toInt() * _stride[0] + idx[1].toInt() * _stride[1]];
     }
 
     [Differentiable]
     [TreatAsDifferentiable]
+    [ForceInline]
     public float load<I : __BuiltinIntegerType>(vector<I, 2> idx) {
         return data[idx[0].toInt() * _stride[0] + idx[1].toInt() * _stride[1]];
     }
 
     public __subscript<I : __BuiltinIntegerType>(I indices[2])->float
     {
-        [Differentiable] get { return load(indices); }
+        [Differentiable] [ForceInline] get { return load(indices); }
     }
+
     public __subscript<I : __BuiltinIntegerType>(vector<I, 2> indices)->float
     {
-        [Differentiable] get { return load(indices); }
+        [Differentiable] [ForceInline] get { return load(indices); }
     }
 }
 
-#ifndef WEIGHTS1_DATA_V
+#ifndef USE_DEFINITON_FILE
 #define WEIGHTS1_DATA_V { 0}
 #define BIAS1_DATA_V { 0}
 #define WEIGHTS2_DATA_V { 0}
 #define BIAS2_DATA_V { 0}
 #define WEIGHTS3_DATA_V { 0}
 #define BIAS3_DATA_V { 0}
+#else
+#include "definitions.slangh"
 #endif
 
+
 // Layer 1: 2 -> 32
-static float WEIGHTS1_DATA[32*2] = WEIGHTS1_DATA_V;
-static float BIAS1_DATA[32] = BIAS1_DATA_V;
+static const float WEIGHTS1_DATA[32*2] = WEIGHTS1_DATA_V;
+static const float BIAS1_DATA[32] = BIAS1_DATA_V;
 
 // Layer 2: 32 -> 32
-static float WEIGHTS2_DATA[32*32] = WEIGHTS2_DATA_V;
-static float BIAS2_DATA[32] = BIAS2_DATA_V;
+static const float WEIGHTS2_DATA[32*32] = WEIGHTS2_DATA_V;
+static const float BIAS2_DATA[32] = BIAS2_DATA_V;
 
 // Layer 3: 32 -> 1
-static float WEIGHTS3_DATA[1*32] = WEIGHTS3_DATA_V;
-static float BIAS3_DATA[1] = BIAS3_DATA_V;
+static const float WEIGHTS3_DATA[3*32] = WEIGHTS3_DATA_V;
+static const float BIAS3_DATA[3] = BIAS3_DATA_V;
 
 // OpenGL Fragment Shader Entry Point
 [shader("fragment")]
@@ -255,13 +268,13 @@ void fragmentMain(
     out float4 outputColor: SV_Target
 ) {
     // evaluate texture
-    float prediction = evaluateNetwork(textureCoords,
-                                       GLSLMatrixWrapper<32*2>.fromTensor(WEIGHTS1_DATA, { 32, 2 }),
-                                       GLSLVectorWrapper<32>.fromTensor(BIAS1_DATA, { 32 }),
-                                       GLSLMatrixWrapper<32*32>.fromTensor(WEIGHTS2_DATA, { 32, 32 }),
-                                       GLSLVectorWrapper<32>.fromTensor(BIAS2_DATA, { 32 }),
-                                       GLSLMatrixWrapper<1*32>.fromTensor(WEIGHTS3_DATA, { 1, 32}),
-                                       GLSLVectorWrapper<1>.fromTensor(BIAS3_DATA, { 1 }),
+    float[3] prediction = evaluateNetwork(textureCoords,
+                                       GLSLMatrixWrapper<32*2>(WEIGHTS1_DATA, { 32, 2 }),
+                                       GLSLVectorWrapper<32>(BIAS1_DATA, { 32 }),
+                                       GLSLMatrixWrapper<32*32>(WEIGHTS2_DATA, { 32, 32 }),
+                                       GLSLVectorWrapper<32>(BIAS2_DATA, { 32 }),
+                                       GLSLMatrixWrapper<3*32>(WEIGHTS3_DATA, { 3, 32}),
+                                       GLSLVectorWrapper<3>(BIAS3_DATA, { 3 }),
                                     );
-    outputColor = float4(prediction, prediction, prediction, 1.0);
+    outputColor = float4(prediction[0], prediction[1], prediction[2], 1.0);
 }
