@@ -9,6 +9,8 @@ import torch.nn.functional as F
 from torchvision import transforms
 
 torch_device = torch.device("cuda")
+torch.cuda.empty_cache()
+torch.cuda.empty_cache()
 
 # Read image
 img = Image.open("textures/Wood_Table_Texture.png").convert("RGB")
@@ -27,9 +29,13 @@ slang_module = spy.Module.load_from_file(slang_device, "../slang/circle_texture_
 # Init model parameters
 torch_model = nn.Sequential(
     nn.Linear(2, 32),
-    nn.LeakyReLU(0.1),
+    nn.LeakyReLU(0.01),
     nn.Linear(32, 32),
-    nn.LeakyReLU(0.1),
+    nn.LeakyReLU(0.01),
+    nn.Linear(32, 32),
+    nn.LeakyReLU(0.01),
+    nn.Linear(32, 32),
+    nn.LeakyReLU(0.01),
     nn.Linear(32, 3),
     nn.Sigmoid()
 ).to(torch_device)
@@ -45,6 +51,8 @@ criterion = nn.MSELoss()
 layer1 = torch_model[0]
 layer2 = torch_model[2]
 layer3 = torch_model[4]
+layer4 = torch_model[6]
+layer5 = torch_model[8]
 
 weights1 = layer1.weight
 bias1 = layer1.bias
@@ -55,40 +63,49 @@ bias2 = layer2.bias
 weights3 = layer3.weight
 bias3 = layer3.bias
 
-# Training Loop
-batch_size = 4096*4
-num_epochs = 400*10
+weights4 = layer4.weight
+bias4 = layer4.bias
 
+weights5 = layer5.weight
+bias5 = layer5.bias
+
+
+# Training Loop
+batch_size = 1024*4
+num_epochs = 400*50
+
+torch.cuda.empty_cache()
 print("Training Slang Neural Texture...")
 for epoch in range(num_epochs):
     optimizer.zero_grad()
     
     # Sample random UV coordinates in [0, 1]
-    uvs = torch.rand((batch_size, 2), device=torch_device, dtype=torch.float32, requires_grad=True)
+    uvs = torch.rand((batch_size, 2), device=torch_device, dtype=torch.float32, requires_grad=False)
     with torch.no_grad():
         y = F.grid_sample(
-            img, uvs.reshape(1, batch_size, 1, 2),
+            img, uvs.reshape(1, batch_size, 1, 2) * 2 - 1,
             mode="bilinear",
             padding_mode="border",
             align_corners=True,
         )
         y = y.reshape(3, -1).transpose(0,1).to(torch.float32) # (1, 3, batch_size, 1) -> (batch_size, 3)
 
-    # y = ((uvs[:, 0] - 0.5) ** 2 + (uvs[:, 1] - 0.5) ** 2 < 0.25).to(torch.float32)
-
     # Compute forwardpass using Slang
     y_hat = slang_module.forward(
         spy.grid(shape=(batch_size,)),
-        uvs=uvs,
+        uv=uvs,
         weights1=weights1,
         bias1=bias1,
         weights2=weights2,
         bias2=bias2,
         weights3=weights3,
-        bias3=bias3
+        bias3=bias3,
+        weights4=weights4,
+        bias4=bias4,
+        weights5=weights5,
+        bias5=bias5,
     )
 
-    
     loss = criterion(y_hat, y)
     loss.backward()
 
@@ -101,10 +118,18 @@ for epoch in range(num_epochs):
 with open("definitions.slangh","w") as f:
     f.write(f"#define WEIGHTS1_DATA_V {{{", ".join(map(str, torch_model[0].weight.reshape(-1).tolist()))}}}\n")
     f.write(f"#define BIAS1_DATA_V {{{", ".join(map(str, torch_model[0].bias.reshape(-1).tolist()))}}}\n")
+
     f.write(f"#define WEIGHTS2_DATA_V {{{", ".join(map(str, torch_model[2].weight.reshape(-1).tolist()))}}}\n")
     f.write(f"#define BIAS2_DATA_V {{{", ".join(map(str, torch_model[2].bias.reshape(-1).tolist()))}}}\n")
+
     f.write(f"#define WEIGHTS3_DATA_V {{{", ".join(map(str, torch_model[4].weight.reshape(-1).tolist()))}}}\n")
     f.write(f"#define BIAS3_DATA_V {{{", ".join(map(str, torch_model[4].bias.reshape(-1).tolist()))}}}\n")
+
+    f.write(f"#define WEIGHTS4_DATA_V {{{", ".join(map(str, torch_model[6].weight.reshape(-1).tolist()))}}}\n")
+    f.write(f"#define BIAS4_DATA_V {{{", ".join(map(str, torch_model[6].bias.reshape(-1).tolist()))}}}\n")
+
+    f.write(f"#define WEIGHTS5_DATA_V {{{", ".join(map(str, torch_model[8].weight.reshape(-1).tolist()))}}}\n")
+    f.write(f"#define BIAS5_DATA_V {{{", ".join(map(str, torch_model[8].bias.reshape(-1).tolist()))}}}\n")
 
 # Inference
 print("Rendering trained procedural texture...")
@@ -112,7 +137,7 @@ res = 256
 grid_x, grid_y = torch.meshgrid(
     torch.linspace(0, 1, res, device=torch_device),
     torch.linspace(0, 1, res, device=torch_device),
-    indexing="ji"
+    indexing="ij"
 )
 eval_uvs = torch.stack([grid_x, grid_y], dim=-1).reshape(-1, 2)
 with torch.no_grad():
